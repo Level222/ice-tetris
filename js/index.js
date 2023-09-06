@@ -3,12 +3,11 @@
 /**
  * @todo 点数
  * @todo 画像
- * @todo 次のTetromino
- * @todo Hold
  * @todo エフェクト
  * @todo ボタン
  * @todo downする時間
- * @todo keyRepeat修正
+ * @todo 削除修正
+ * @todo 影
  */
 
 (() => {
@@ -235,9 +234,7 @@
     let prevKeyDownEvent = null;
 
     onKeyDown.addListener((e) => {
-      if (!e.repeat) {
-        prevKeyDownEvent = e;
-      }
+      prevKeyDownEvent = e;
     });
 
     return (options, dispatch) => {
@@ -265,6 +262,8 @@
         if (e.repeat) {
           return;
         }
+        timeout.cancel();
+        interval.stop();
         dispatch(e, { repeat: false });
         if (delay) {
           timeout.start(delay);
@@ -421,27 +420,40 @@
       }]
     ]);
 
+    static usedNumbers = new Set();
+
     static random() {
-      const random = Math.floor(Math.random() * this.SHAPES.size);
-      return new Tetromino([...this.SHAPES.keys()][random]);
+      if (this.usedNumbers.size === 7) {
+        this.usedNumbers.clear();
+      }
+
+      while (true) {
+        const tempRandom = Math.floor(Math.random() * 7);
+        if (!this.usedNumbers.has(tempRandom)) {
+          this.usedNumbers.add(tempRandom);
+          return new Tetromino([...this.SHAPES.keys()][tempRandom]);
+        }
+      }
     }
 
     /**
      * @param {string} type
      */
     constructor(type) {
-      const tetrominoData = Tetromino.SHAPES.get(type);
+      this.type = type;
+      this.shape = this.getInitialShape();
+      this.width = Math.max(...this.shape.map(row => row.length));
+      this.height = this.shape.length;
+    }
+
+    getInitialShape() {
+      const tetrominoData = Tetromino.SHAPES.get(this.type);
       if (!tetrominoData) {
         throw new TypeError("Invalid argument type.");
       }
-
-      this.type = type;
-      this.color = tetrominoData.color;
-      this.shape = tetrominoData.shape.map((
-        (row) => row.map((isEmpty) => isEmpty ? new Block(this.color) : new EmptyBlock())
+      return tetrominoData.shape.map((
+        (row) => row.map((isEmpty) => isEmpty ? new Block(tetrominoData.color) : new EmptyBlock())
       ));
-      this.width = Math.max(...this.shape.map(row => row.length));
-      this.height = this.shape.length;
     }
   }
 
@@ -577,12 +589,15 @@
 
     deleteRows() {
       let count = 0;
-      this.shape = [...this.shape].reverse().map((row, rowIndex, shape) => {
-        if (row.every((block) => !block.isEmpty)) {
-          count++;
+      for (const [completeRowIndex, row] of this.shape.entries()) {
+        if (row.some((block) => block.isEmpty)) {
+          continue;
         }
-        return shape[rowIndex + count] || this.createEmptyRow();
-      }).reverse();
+        for (const rowIndex of [...this.shape.keys()].slice(0, completeRowIndex + 1).reverse()) {
+          this.shape[rowIndex] = this.shape[rowIndex - 1] || this.createEmptyRow();
+        }
+        count++;
+      }
       return count;
     }
 
@@ -732,8 +747,12 @@
       render(/** @type {NextTetrominoListProps} */ { nextTetrominoList }) {
         const x = Field.Renderer.X + Block.Renderer.SIZE * Field.WIDTH;
         const y = Field.Renderer.Y;
-        return nextTetrominoList.tetrominoes.map(({ shape }, index) => (
-          BlockGroupRenderer({ shape, x, y: y + index * Block.Renderer.SIZE * 5 })
+        return nextTetrominoList.tetrominoes.map((tetromino, index) => (
+          BlockGroupRenderer({
+            shape: tetromino.shape,
+            x: x + Block.Renderer.SIZE * (5 - tetromino.width) / 2,
+            y: y + index * Block.Renderer.SIZE * 5 + Block.Renderer.SIZE * (5 - tetromino.height) / 2
+          })
         ));
       }
     });
@@ -762,25 +781,38 @@
   }
 
   /**
+   * @typedef {{
+   *   score: number;
+   *   level: number;
+   *   lines: number;
+   * }} GameData
+   */
+
+  /**
    * @typedef {{ gameData: GameData }} GameDataProps
    */
 
-  class GameData {
-    static Renderer = createRenderer({
-      render(/** @type {GameDataProps} */ { gameData }, ctx) {
-        ctx.fillStyle = "black";
-        ctx.font = "12px sans-serif";
-        ctx.fillText(String(gameData.level), GameData.Renderer.X, GameData.Renderer.Y);
-      },
-
-      static: {
-        X: 20,
-        Y: 600
+  const GameDataRenderer = createRenderer({
+    render(/** @type {GameDataProps} */ { gameData }, ctx) {
+      ctx.fillStyle = "#666";
+      for (const [index, [key, value]] of Object.entries(gameData).entries()) {
+        const x = GameDataRenderer.X;
+        const y = GameDataRenderer.Y + index * 150;
+        ctx.font = "40px sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText(String(key), x, y);
+        ctx.font = "45px sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText(String(value), x + GameDataRenderer.WIDTH, y + 60);
       }
-    });
+    },
 
-    level = 1;
-  }
+    static: {
+      X: 50,
+      Y: 500,
+      WIDTH: 180
+    }
+  });
 
   /**
    * @typedef {{ lockDelay: LockDelay }} LockDelayProps
@@ -830,6 +862,66 @@
   }
 
   /**
+   * @typedef {{ holder: Holder }} HolderProps
+   */
+
+  class Holder {
+    static Renderer = createRenderer({
+      render(/** @type {HolderProps} */ { holder }, ctx) {
+        if (!holder.tetromino) {
+          return;
+        }
+
+        const size = Block.Renderer.SIZE * 5;
+
+        if (!holder.active) {
+          ctx.fillStyle = "#f00";
+          ctx.arc(Holder.Renderer.X + size - 40, Holder.Renderer.Y + size - 40, 20, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        /**
+         * @type {number}
+         */
+        const x = Holder.Renderer.X + (size - Block.Renderer.SIZE * holder.tetromino.width) / 2;
+        /**
+         * @type {number}
+         */
+        const y = Holder.Renderer.Y + (size - Block.Renderer.SIZE * holder.tetromino.height) / 2;
+
+        return [BlockGroupRenderer({ shape: holder.tetromino.shape, x, y })];
+      },
+
+      static: {
+        X: 50,
+        Y: 150
+      }
+    });
+
+    /**
+     * @type {Tetromino | null}
+     */
+    tetromino = null;
+
+    active = true;
+
+    /**
+     * @param {Tetromino} newTetromino
+     */
+    hold(newTetromino) {
+      const heldTetromino = this.tetromino;
+      this.tetromino = newTetromino;
+      this.tetromino.shape = this.tetromino.getInitialShape();
+      this.active = false;
+      return heldTetromino;
+    }
+
+    activate() {
+      this.active = true;
+    }
+  }
+
+  /**
    * @typedef {{ game: Game }} GameProps
    */
 
@@ -838,9 +930,10 @@
       render(/** @type {GameProps} */ { game }) {
         return [
           Field.Renderer({ field: game.field }),
-          GameData.Renderer({ gameData: game.gameData }),
+          GameDataRenderer({ gameData: game.gameData }),
           LockDelay.Renderer({ lockDelay: game.lockDelay }),
-          NextTetrominoesList.Renderer({ nextTetrominoList: game.nextTetrominoes })
+          NextTetrominoesList.Renderer({ nextTetrominoList: game.nextTetrominoes }),
+          Holder.Renderer({ holder: game.holder })
         ];
       },
 
@@ -852,14 +945,23 @@
 
     field = new Field(new FieldTetromino(Tetromino.random(), (Field.HEIGHT - Field.VISIBLE_HEIGHT - 2)));
     nextTetrominoes = new NextTetrominoesList(Array.from({ length: 3 }, () => Tetromino.random()));
-    gameData = new GameData();
+    /**
+     * @type {GameData}
+     */
+    gameData = {
+      level: 1,
+      score: 0,
+      lines: 0
+    };
     lockDelay = new LockDelay();
+    holder = new Holder();
+
+    movingDownInterval = new Interval(() => {
+      this.moveFieldTetromino(0, 1);
+    });
 
     start() {
-      this.tetrominoInterval = new Interval(() => {
-        this.moveFieldTetromino(0, 1);
-      });
-      this.tetrominoInterval.start(Math.pow(0.8 - ((this.gameData.level - 1) * 0.007), this.gameData.level - 1) * 1000);
+      this.setMovingDownInterval();
 
       onKeyDown.addListener((e) => {
         if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) {
@@ -881,7 +983,14 @@
             // hardDrop
             break;
           case "KeyC":
-            // hold
+            if (this.holder.active) {
+              const heldTetromino = this.holder.hold(this.field.fieldTetromino.tetromino);
+              if (heldTetromino) {
+                this.setFieldTetromino(heldTetromino);
+              } else {
+                this.setNextTetromino();
+              }
+            }
             break;
         }
       });
@@ -906,6 +1015,10 @@
       this.lockDelay.onEnded.addListener(() => {
         this.afterReachBottom();
       });
+    }
+
+    setMovingDownInterval() {
+      this.movingDownInterval.start(Math.pow(0.8 - ((this.gameData.level - 1) * 0.007), this.gameData.level - 1) * 1000);
     }
 
     /**
@@ -949,9 +1062,42 @@
       const { fieldTetromino } = this.field;
       this.field.placed.place(fieldTetromino.tetromino, fieldTetromino.fieldX, fieldTetromino.fieldY);
       const deletedRows = this.field.placed.deleteRows();
-      const newTetromino = this.nextTetrominoes.shift(Tetromino.random());
-      this.field.fieldTetromino = new FieldTetromino(newTetromino, Field.HEIGHT - Field.VISIBLE_HEIGHT - 2);
+
+      let score = 0;
+      switch (deletedRows) {
+        case 1:
+          score = 100;
+          break;
+        case 2:
+          score = 300;
+          break;
+        case 3:
+          score = 500;
+          break;
+        case 4:
+          score = 800;
+          break;
+      }
+      this.gameData.score += score;
+      this.gameData.lines += deletedRows;
+      this.gameData.level = Math.floor(this.gameData.lines / 10 + 1);
+
+      this.holder.activate();
+      this.setMovingDownInterval();
+      this.setNextTetromino();
+    }
+
+    /**
+     * @param {Tetromino} tetromino
+     */
+    setFieldTetromino(tetromino) {
+      this.field.fieldTetromino = new FieldTetromino(tetromino, Field.HEIGHT - Field.VISIBLE_HEIGHT - 2);
       this.handleActField();
+    }
+
+    setNextTetromino() {
+      const newTetromino = this.nextTetrominoes.shift(Tetromino.random());
+      this.setFieldTetromino(newTetromino);
     }
   }
 
