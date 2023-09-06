@@ -1,10 +1,11 @@
 // @ts-check
 
 /**
- * @todo 点数
+ * @todo 点数の厳密な判定
  * @todo エフェクト
  * @todo ボタン
  * @todo downするタイミング
+ * @todo start screen
  */
 
 (async () => {

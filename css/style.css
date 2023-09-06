@@ -1,5 +1,26 @@
 body {
   font: 16px sans-serif;
+  margin: 0;
+}
+
+main {
+  display: flex;
+  justify-content: center;
+}
+
+@media screen and (min-width: 600px) {
+  .center {
+    width: 600px;
+  }
+}
+
+h1 {
+  display: flex;
+  justify-content: center;
+}
+
+h1 > img {
+  width: 70%;
 }
 
 #tetris {
@@ -8,5 +29,6 @@ body {
 }
 
 canvas {
-  height: 90vh;
+  max-width: 100%;
+  max-height: 90vh;
 }
