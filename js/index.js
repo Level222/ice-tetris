@@ -1109,7 +1109,10 @@
 
   class Game {
     static Renderer = createRenderer({
-      render(/** @type {GameProps} */ { game }) {
+      render(/** @type {GameProps} */ { game }, ctx) {
+        ctx.fillStyle = "#efefef";
+        ctx.fillRect(0, 0, Tetris.Renderer.WIDTH, Tetris.Renderer.HEIGHT);
+
         return [
           Field.Renderer({ field: game.field }),
           GameDataRenderer({ gameData: game.gameData }),
@@ -1117,11 +1120,6 @@
           NextTetrominoesList.Renderer({ nextTetrominoList: game.nextTetrominoes }),
           Holder.Renderer({ holder: game.holder })
         ];
-      },
-
-      static: {
-        WIDTH: 1100,
-        HEIGHT: 1500
       }
     });
 
@@ -1365,7 +1363,7 @@
 
       static: {
         WIDTH: 1100,
-        HEIGHT: 1500
+        HEIGHT: 1300
       }
     });
 

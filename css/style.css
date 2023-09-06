@@ -2,7 +2,11 @@ body {
   font: 16px sans-serif;
 }
 
+#tetris {
+  display: flex;
+  justify-content: center;
+}
+
 canvas {
-  width: 100%;
-  background-color: whitesmoke;
+  height: 90vh;
 }
