@@ -19,6 +19,22 @@ h1 {
   justify-content: center;
 }
 
+dl {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: 8px 30px;
+  margin-left: 20px;
+}
+
+dt {
+  grid-column: 1;
+}
+
+dd {
+  grid-column: 2;
+  margin: 0;
+}
+
 h1 > img {
   width: 70%;
 }
