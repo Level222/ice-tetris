@@ -2,16 +2,63 @@
 
 /**
  * @todo 点数
- * @todo 画像
  * @todo エフェクト
  * @todo ボタン
- * @todo downする時間
- * @todo 削除修正
- * @todo 影
+ * @todo downするタイミング
  */
 
-(() => {
+(async () => {
   "use strict";
+
+  /**
+   * @param {string} url
+   * @returns {Promise<HTMLImageElement>}
+   */
+  const loadImage = (url) => new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener("load", () => {
+      resolve(image);
+    });
+    image.addEventListener("error", (e) => {
+      reject(e.error);
+    });
+    image.src = url;
+  });
+
+  /**
+   * @param {Record<string, Record<string, string>>} obj
+   * @returns {Promise<Record<string, Record<string, HTMLImageElement>>>}
+   */
+  const loadImagesObj = async (obj) => {
+    return Object.fromEntries(await Promise.all(
+      Object.entries(obj).map(async ([key, urls]) => await Promise.all([key, Object.fromEntries(
+        await Promise.all(
+          Object.entries(urls).map(async ([subKey, url]) => [subKey, await loadImage(url)])
+        )
+      )]))
+    ));
+  };
+
+  const images = await loadImagesObj({
+    iceBlocks: {
+      "I": "./assets/images/ice-blocks/i.png",
+      "O": "./assets/images/ice-blocks/o.png",
+      "S": "./assets/images/ice-blocks/s.png",
+      "Z": "./assets/images/ice-blocks/z.png",
+      "J": "./assets/images/ice-blocks/j.png",
+      "L": "./assets/images/ice-blocks/l.png",
+      "T": "./assets/images/ice-blocks/t.png"
+    },
+    middleBlocks: {
+      "I": "./assets/images/middle-blocks/i.png",
+      "O": "./assets/images/middle-blocks/o.png",
+      "S": "./assets/images/middle-blocks/s.png",
+      "Z": "./assets/images/middle-blocks/z.png",
+      "J": "./assets/images/middle-blocks/j.png",
+      "L": "./assets/images/middle-blocks/l.png",
+      "T": "./assets/images/middle-blocks/t.png"
+    }
+  });
 
   /**
    * @typedef {(ctx: CanvasRenderingContext2D) => CanvasRendererInstance[] | void} CanvasRendererInstance
@@ -155,7 +202,7 @@
    */
   class OriginalEvent {
     /**
-     * @type {Set<OriginalEventHandler<EVENTS>}
+     * @type {Set<OriginalEventHandler<EVENTS>>}
      */
     handlers = new Set();
     initCalled = false;
@@ -305,8 +352,12 @@
   class Block {
     static Renderer = createRenderer({
       render(/** @type {BlockProps} */ { block, x, y }, ctx) {
-        ctx.fillStyle = block.color;
-        ctx.fillRect(x, y, Block.Renderer.SIZE, Block.Renderer.SIZE);
+        if (typeof block.appearance === "string") {
+          ctx.fillStyle = block.appearance;
+          ctx.fillRect(x, y, Block.Renderer.SIZE, Block.Renderer.SIZE);
+        } else {
+          ctx.drawImage(block.appearance, x, y, Block.Renderer.SIZE, Block.Renderer.SIZE);
+        }
       },
 
       static: {
@@ -320,12 +371,126 @@
     isEmpty = false;
 
     /**
-     * @param {string} color
+     * @param {string | HTMLImageElement} appearance
      */
-    constructor(color) {
-      this.color = color;
+    constructor(appearance) {
+      this.appearance = appearance;
     }
   }
+
+  /**
+   * @typedef {"ice" | "middle" | "melted"} MeltStatus
+   */
+
+  class MeltableBlock extends Block {
+    /**
+     * @param {string} type
+     */
+    constructor(type) {
+      const tetrominoData = TETROMINO_SHAPES.get(type);
+      if (!tetrominoData) {
+        throw new TypeError("Invalid argument type.");
+      }
+
+      super(tetrominoData.iceImage);
+      this.tetrominoData = tetrominoData;
+    }
+
+    onMelted = new OriginalEvent((dispatchAll) => {
+      this.handleMelted = dispatchAll;
+    });
+
+    /**
+     * @type {MeltStatus}
+     */
+    status = "ice";
+
+    iceToMiddleTimer = new Timeout(() => {
+      this.status = "middle";
+      this.appearance = this.tetrominoData.middleImage;
+      this.middleToWaterTimer.start((Math.random() * 15 + 10) * 1000);
+    });
+
+    middleToWaterTimer = new Timeout(() => {
+      this.status = "melted";
+      this.handleMelted?.();
+    });
+
+    startMelt() {
+      this.iceToMiddleTimer.start((Math.random() * 20 + 15) * 1000);
+    }
+
+    stopMelt() {
+      this.iceToMiddleTimer.cancel();
+      this.middleToWaterTimer.cancel();
+    }
+  }
+
+  const TETROMINO_SHAPES = new Map([
+    ["I", {
+      shape: [
+        [0, 0, 0, 0],
+        [1, 1, 1, 1],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0]
+      ],
+      iceImage: images.iceBlocks.I,
+      middleImage: images.middleBlocks.I
+    }],
+    ["O", {
+      shape: [
+        [1, 1],
+        [1, 1]
+      ],
+      iceImage: images.iceBlocks.O,
+      middleImage: images.middleBlocks.O
+    }],
+    ["S", {
+      shape: [
+        [0, 1, 1],
+        [1, 1, 0],
+        [0, 0, 0]
+      ],
+      iceImage: images.iceBlocks.S,
+      middleImage: images.middleBlocks.S
+    }],
+    ["Z", {
+      shape: [
+        [1, 1, 0],
+        [0, 1, 1],
+        [0, 0, 0]
+      ],
+      iceImage: images.iceBlocks.Z,
+      middleImage: images.middleBlocks.Z
+    }],
+    ["J", {
+      shape: [
+        [1, 0, 0],
+        [1, 1, 1],
+        [0, 0, 0]
+      ],
+      iceImage: images.iceBlocks.J,
+      middleImage: images.middleBlocks.J
+    }],
+    ["L", {
+      shape: [
+        [0, 0, 1],
+        [1, 1, 1],
+        [0, 0, 0]
+      ],
+      iceImage: images.iceBlocks.L,
+      middleImage: images.middleBlocks.L
+    }],
+    ["T", {
+      shape: [
+        [0, 1, 0],
+        [1, 1, 1],
+        [0, 0, 0]
+      ],
+      iceImage: images.iceBlocks.T,
+      middleImage: images.middleBlocks.T
+    }]
+  ]);
 
   /**
    * @typedef {(Block | EmptyBlock)[][]} Shape
@@ -367,59 +532,6 @@
       }
     });
 
-    static SHAPES = new Map([
-      ["I", {
-        shape: [
-          [0, 0, 0, 0],
-          [1, 1, 1, 1],
-          [0, 0, 0, 0],
-          [0, 0, 0, 0]
-        ],
-        color: "#0ff"
-      }],
-      ["O", {
-        shape: [
-          [1, 1],
-          [1, 1]
-        ], color: "#ff0"
-      }],
-      ["S", {
-        shape: [
-          [0, 1, 1],
-          [1, 1, 0],
-          [0, 0, 0]
-        ], color: "#0f0"
-      }],
-      ["Z", {
-        shape: [
-          [1, 1, 0],
-          [0, 1, 1],
-          [0, 0, 0]
-        ], color: "#f00"
-      }],
-      ["J", {
-        shape: [
-          [1, 0, 0],
-          [1, 1, 1],
-          [0, 0, 0]
-        ], color: "#00f"
-      }],
-      ["L", {
-        shape: [
-          [0, 0, 1],
-          [1, 1, 1],
-          [0, 0, 0]
-        ], color: "#ff7f00"
-      }],
-      ["T", {
-        shape: [
-          [0, 1, 0],
-          [1, 1, 1],
-          [0, 0, 0]
-        ], color: "#f0f"
-      }]
-    ]);
-
     static usedNumbers = new Set();
 
     static random() {
@@ -431,7 +543,7 @@
         const tempRandom = Math.floor(Math.random() * 7);
         if (!this.usedNumbers.has(tempRandom)) {
           this.usedNumbers.add(tempRandom);
-          return new Tetromino([...this.SHAPES.keys()][tempRandom]);
+          return new Tetromino([...TETROMINO_SHAPES.keys()][tempRandom]);
         }
       }
     }
@@ -447,12 +559,12 @@
     }
 
     getInitialShape() {
-      const tetrominoData = Tetromino.SHAPES.get(this.type);
+      const tetrominoData = TETROMINO_SHAPES.get(this.type);
       if (!tetrominoData) {
         throw new TypeError("Invalid argument type.");
       }
       return tetrominoData.shape.map((
-        (row) => row.map((isEmpty) => isEmpty ? new Block(tetrominoData.color) : new EmptyBlock())
+        (row) => row.map((isEmpty) => isEmpty ? new Block(tetrominoData.iceImage) : new EmptyBlock())
       ));
     }
   }
@@ -566,6 +678,10 @@
       this.shape = Array.from({ length: this.height }, () => this.createEmptyRow());
     }
 
+    onSomeBlockMelted = new OriginalEvent((dispatchAll) => {
+      this.handleSomeBlockMelted = dispatchAll;
+    });
+
     /**
      * @param {Tetromino} tetromino
      * @param {number} x
@@ -579,10 +695,22 @@
             return block;
           }
           const newBlock = newRow[colIndex - x];
-          if (!newBlock) {
+          if (!newBlock || newBlock.isEmpty) {
             return block;
           }
-          return newBlock.isEmpty ? block : newBlock;
+
+          const meltableBlock = new MeltableBlock(tetromino.type);
+          meltableBlock.startMelt();
+          meltableBlock.onMelted.addListener(() => {
+            this.shape[rowIndex][colIndex] = new EmptyBlock();
+            this.handleSomeBlockMelted?.();
+          });
+
+          if (block instanceof MeltableBlock) {
+            block.stopMelt();
+          }
+
+          return meltableBlock;
         })
       ));
     }
@@ -607,6 +735,25 @@
   }
 
   /**
+   * @typedef {{ shape: Shape; x: number; y: number; }} GhostBlockProps
+   */
+
+  const GhostBlockRenderer = createRenderer({
+    render(/** @type {GhostBlockProps} */ { shape, x, y }) {
+      const ghostShape = shape.map((row) => (
+        row.map((block) => (
+          block.isEmpty
+            ? block
+            : new Block("#aaa")
+        ))
+      ));
+      return [
+        BlockGroupRenderer({ shape: ghostShape, x, y })
+      ];
+    }
+  });
+
+  /**
    * @typedef {{ field: Field }} FieldProps
    */
 
@@ -617,13 +764,26 @@
 
     static Renderer = createRenderer({
       render(/** @type {FieldProps} */ { field }, ctx) {
+        const { fieldTetromino } = field;
+
         ctx.fillStyle = "#dfdfdf";
+        /**
+         * @type {number}
+         */
         const x = Field.Renderer.X;
+        /**
+         * @type {number}
+         */
         const y = Field.Renderer.Y;
         ctx.fillRect(x, y, Block.Renderer.SIZE * Field.WIDTH, Block.Renderer.SIZE * Field.VISIBLE_HEIGHT);
 
         return [
-          FieldTetromino.Renderer({ fieldTetromino: field.fieldTetromino }),
+          GhostBlockRenderer({
+            x: x + Block.Renderer.SIZE * fieldTetromino.fieldX,
+            y: y + Block.Renderer.SIZE * (field.getHardDropPosition() - (Field.HEIGHT - Field.VISIBLE_HEIGHT)),
+            shape: fieldTetromino.tetromino.shape
+          }),
+          FieldTetromino.Renderer({ fieldTetromino: fieldTetromino }),
           PlacedBlocks.Renderer({ placedBlocks: field.placed })
         ];
       },
@@ -736,6 +896,18 @@
       }
       return false;
     }
+
+    getHardDropPosition() {
+      let i = 0;
+      while (this.canPlaceShape(
+        this.fieldTetromino.tetromino.shape,
+        this.fieldTetromino.fieldX,
+        this.fieldTetromino.fieldY + i
+      )) {
+        i++;
+      }
+      return this.fieldTetromino.fieldY + i - 1;
+    }
   }
 
   /**
@@ -785,6 +957,8 @@
    *   score: number;
    *   level: number;
    *   lines: number;
+   *   combo: number;
+   *   time: number;
    * }} GameData
    */
 
@@ -922,6 +1096,14 @@
   }
 
   /**
+   * @typedef {{
+   *   lines: number;
+   *   combo: number;
+   *   level: number;
+   * }} ScoreCalculationData
+   */
+
+  /**
    * @typedef {{ game: Game }} GameProps
    */
 
@@ -945,23 +1127,39 @@
 
     field = new Field(new FieldTetromino(Tetromino.random(), (Field.HEIGHT - Field.VISIBLE_HEIGHT - 2)));
     nextTetrominoes = new NextTetrominoesList(Array.from({ length: 3 }, () => Tetromino.random()));
+    lockDelay = new LockDelay();
+    holder = new Holder();
+
     /**
      * @type {GameData}
      */
     gameData = {
       level: 1,
       score: 0,
-      lines: 0
+      lines: 0,
+      combo: -1,
+      time: 300
     };
-    lockDelay = new LockDelay();
-    holder = new Holder();
 
     movingDownInterval = new Interval(() => {
       this.moveFieldTetromino(0, 1);
     });
 
+    timeInterval = new Interval(() => {
+      this.gameData.time--;
+      if (this.gameData.time === 0) {
+        this.timeInterval.stop();
+        this.handleGameOver?.();
+      }
+    });
+
+    onGameOver = new OriginalEvent((dispatchAll) => {
+      this.handleGameOver = dispatchAll;
+    });
+
     start() {
       this.setMovingDownInterval();
+      this.timeInterval.start(1000);
 
       onKeyDown.addListener((e) => {
         if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) {
@@ -980,7 +1178,7 @@
             this.rotateFieldTetromino(-1);
             break;
           case "Space":
-            // hardDrop
+            this.moveFieldTetromino(0, this.field.getHardDropPosition() - this.field.fieldTetromino.fieldY, true);
             break;
           case "KeyC":
             if (this.holder.active) {
@@ -1024,11 +1222,12 @@
     /**
      * @param {number} moveX
      * @param {number} moveY
+     * @param {boolean} instant
      */
-    moveFieldTetromino(moveX, moveY) {
+    moveFieldTetromino(moveX, moveY, instant = false) {
       const result = this.field.moveTetromino(moveX, moveY);
       if (result) {
-        this.handleActField();
+        this.handleActField(instant);
       }
       return result;
     }
@@ -1044,8 +1243,18 @@
       return result;
     }
 
-    handleActField() {
+    /**
+     * @param {boolean} instant
+     */
+    handleActField(instant = false) {
+      if (instant) {
+        this.lockDelay.inactivate();
+        this.afterReachBottom();
+        return;
+      }
+
       const { fieldTetromino } = this.field;
+
       const canMoveDown = this.field.canPlaceShape(
         fieldTetromino.tetromino.shape,
         fieldTetromino.fieldX,
@@ -1061,10 +1270,36 @@
     afterReachBottom() {
       const { fieldTetromino } = this.field;
       this.field.placed.place(fieldTetromino.tetromino, fieldTetromino.fieldX, fieldTetromino.fieldY);
-      const deletedRows = this.field.placed.deleteRows();
+      const deletedLines = this.field.placed.deleteRows();
 
+      this.gameData.combo = deletedLines > 0
+        ? this.gameData.combo + 1
+        : -1;
+
+      const score = this.calculateScore({
+        lines: deletedLines,
+        combo: this.gameData.combo,
+        level: this.gameData.level
+      });
+
+      this.gameData.score += score;
+      this.gameData.lines += deletedLines;
+      this.gameData.level = Math.floor(this.gameData.lines / 10 + 1);
+
+      if (this.isGameOver()) {
+        this.handleGameOver?.();
+        return;
+      }
+
+      this.holder.activate();
+      this.setMovingDownInterval();
+      this.setNextTetromino();
+    }
+
+    calculateScore(/** @type {ScoreCalculationData} */ { lines, combo, level }) {
       let score = 0;
-      switch (deletedRows) {
+
+      switch (lines) {
         case 1:
           score = 100;
           break;
@@ -1078,13 +1313,28 @@
           score = 800;
           break;
       }
-      this.gameData.score += score;
-      this.gameData.lines += deletedRows;
-      this.gameData.level = Math.floor(this.gameData.lines / 10 + 1);
 
-      this.holder.activate();
-      this.setMovingDownInterval();
-      this.setNextTetromino();
+      score *= level;
+
+      if (combo > 0) {
+        score += combo * 50;
+      }
+
+      return score;
+    }
+
+    isGameOver() {
+      const baseX = Math.floor((Field.WIDTH + 4) / 2 - 4);
+      const baseY = Field.HEIGHT - Field.VISIBLE_HEIGHT - 2;
+
+      for (let rowIndex = 0; rowIndex < 2; rowIndex++) {
+        for (let colIndex = 0; colIndex < 4; colIndex++) {
+          if (!this.field.placed.shape[baseY + rowIndex][baseX + colIndex].isEmpty) {
+            return true;
+          }
+        }
+      }
+      return false;
     }
 
     /**
@@ -1139,6 +1389,9 @@
         tetris: this
       }));
 
+      this.game.onGameOver.addListener(() => {
+        alert("Game Over");
+      });
       this.game.start();
     }
   }
