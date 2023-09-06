@@ -1,15 +1,14 @@
 // @ts-check
 
 /**
- * @todo Tetromino設置
- * @todo 行を削除
  * @todo 点数
  * @todo 画像
  * @todo 次のTetromino
- * @todo Lock Delay
  * @todo Hold
  * @todo エフェクト
  * @todo ボタン
+ * @todo downする時間
+ * @todo keyRepeat修正
  */
 
 (() => {
@@ -330,12 +329,16 @@
   }
 
   /**
-   * @typedef {{ x: number, y: number, shape: (Block | EmptyBlock)[][] }} BlockGroupRendererProps
+   * @typedef {(Block | EmptyBlock)[][]} Shape
+   */
+
+  /**
+   * @typedef {{ x: number, y: number, shape: Shape }} BlockGroupProps
    */
 
   const BlockGroupRenderer = createRenderer({
-    render(/** @type BlockGroupRendererProps */ { shape: blocksShape, x, y }) {
-      const blocks = blocksShape.flatMap((row, rowIndex) => (
+    render(/** @type {BlockGroupProps} */ { shape, x, y }) {
+      const blocks = shape.flatMap((row, rowIndex) => (
         row.flatMap((block, colIndex) => (
           block.isEmpty
             ? []
@@ -367,10 +370,12 @@
 
     static SHAPES = new Map([
       ["I", {
-        shape: [[0, 0, 0, 0],
-        [1, 1, 1, 1],
-        [0, 0, 0, 0],
-        [0, 0, 0, 0]],
+        shape: [
+          [0, 0, 0, 0],
+          [1, 1, 1, 1],
+          [0, 0, 0, 0],
+          [0, 0, 0, 0]
+        ],
         color: "#0ff"
       }],
       ["O", {
@@ -427,7 +432,7 @@
     constructor(type) {
       const tetrominoData = Tetromino.SHAPES.get(type);
       if (!tetrominoData) {
-        throw new TypeError("Invalid argument type");
+        throw new TypeError("Invalid argument type.");
       }
 
       this.type = type;
@@ -491,7 +496,7 @@
         return 4 + direction;
       }
       if (newDirection > 3) {
-        return 0 + direction;
+        return -1 + direction;
       }
       return newDirection;
     }
@@ -531,7 +536,7 @@
         return [BlockGroupRenderer({
           shape: placedBlocks.shape,
           x: Field.Renderer.X,
-          y: Field.Renderer.Y
+          y: Field.Renderer.Y - Block.Renderer.SIZE * (Field.HEIGHT - Field.VISIBLE_HEIGHT)
         })];
       }
     });
@@ -541,12 +546,48 @@
      * @param {number} height
      */
     constructor(width, height) {
+      this.width = width;
+      this.height = height;
       /**
-       * @type {(Block | EmptyBlock)[][]}
+       * @type {Shape}
        */
-      this.shape = Array.from({ length: height }, () => (
-        Array.from({ length: width }, () => new EmptyBlock())
+      this.shape = Array.from({ length: this.height }, () => this.createEmptyRow());
+    }
+
+    /**
+     * @param {Tetromino} tetromino
+     * @param {number} x
+     * @param {number} y
+     */
+    place(tetromino, x, y) {
+      this.shape = this.shape.map((row, rowIndex) => (
+        row.map((block, colIndex) => {
+          const newRow = tetromino.shape[rowIndex - y];
+          if (!newRow) {
+            return block;
+          }
+          const newBlock = newRow[colIndex - x];
+          if (!newBlock) {
+            return block;
+          }
+          return newBlock.isEmpty ? block : newBlock;
+        })
       ));
+    }
+
+    deleteRows() {
+      let count = 0;
+      this.shape = [...this.shape].reverse().map((row, rowIndex, shape) => {
+        if (row.every((block) => !block.isEmpty)) {
+          count++;
+        }
+        return shape[rowIndex + count] || this.createEmptyRow();
+      }).reverse();
+      return count;
+    }
+
+    createEmptyRow() {
+      return Array.from({ length: this.width }, () => new EmptyBlock());
     }
   }
 
@@ -578,129 +619,33 @@
       }
     });
 
-    static basicSRSRuleSets = {
+    static BASIC_SRS_RULE_SETS = {
       "1": [
-        [
-          [0, 0],
-          [-1, 0],
-          [-1, 1],
-          [0, -2],
-          [-1, -2]
-        ],
-        [
-          [0, 0],
-          [-1, 0],
-          [-1, -1],
-          [0, 2],
-          [-1, 2]
-        ],
-        [
-          [0, 0],
-          [1, 0],
-          [1, 1],
-          [0, -2],
-          [1, -2]
-        ],
-        [
-          [0, 0],
-          [1, 0],
-          [1, -1],
-          [0, 2],
-          [1, 2]
-        ]
+        [[0, 0], [-1, 0], [-1, -1], [0, 2], [-1, 2]],
+        [[0, 0], [1, 0], [1, 1], [0, -2], [1, -2]],
+        [[0, 0], [1, 0], [1, -1], [0, 2], [1, 2]],
+        [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]]
       ],
       "-1": [
-        [
-          [0, 0],
-          [1, 0],
-          [1, 1],
-          [0, -2],
-          [1, -2]
-        ],
-        [
-          [0, 0],
-          [-1, 0],
-          [-1, -1],
-          [0, 2],
-          [-1, 2]
-        ],
-        [
-          [0, 0],
-          [-1, 0],
-          [-1, 1],
-          [0, -2],
-          [-1, -2]
-        ],
-        [
-          [0, 0],
-          [1, 0],
-          [1, -1],
-          [0, 2],
-          [1, 2]
-        ]
-      ]
+        [[0, 0], [1, 0], [1, 1], [0, -2], [1, -2]],
+        [[0, 0], [-1, 0], [-1, -1], [0, 2], [-1, 2]],
+        [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]],
+        [[0, 0], [1, 0], [1, -1], [0, 2], [1, 2]]
+      ],
     };
 
-    static iTypeSRSRuleSets = {
+    static I_TYPE_SRC_RULE_SETS = {
       "1": [
-        [
-          [0, 0],
-          [1, 0],
-          [-2, 0],
-          [1, 2],
-          [-2, -1]
-        ],
-        [
-          [0, 0],
-          [-2, 0],
-          [1, 0],
-          [-2, 1],
-          [1, -2]
-        ],
-        [
-          [0, 0],
-          [-1, 0],
-          [2, 0],
-          [-1, -2],
-          [2, 1]
-        ],
-        [
-          [0, 0],
-          [2, 0],
-          [-1, 0],
-          [2, -1],
-          [-1, 2]
-        ]
+        [[0, 0], [-2, 0], [1, 0], [-2, 1], [1, -2]],
+        [[0, 0], [-1, 0], [2, 0], [-1, -2], [2, 1]],
+        [[0, 0], [2, 0], [1, 0], [2, -1], [-1, 2]],
+        [[0, 0], [1, 0], [2, 0], [1, 2], [-2, -1]]
       ],
       "-1": [
-        [
-          [0, 0],
-          [2, 0],
-          [-1, 0],
-          [2, -1],
-          [-1, 2]
-        ],
-        [
-          [0, 0],
-          [1, 0],
-          [-2, 0],
-          [1, 2],
-          [-2, -1]
-        ],
-        [
-          [0, 0],
-          [-2, 0],
-          [1, 0],
-          [-2, 1],
-          [1, -2]
-        ],
-        [
-          [0, 0],
-          [-1, 0],
-          [2, 0],
-          [-1, -2],
-          [2, 1]
-        ]
+        [[0, 0], [2, 0], [-1, 0], [2, -1], [-1, 2]],
+        [[0, 0], [1, 0], [-2, 0], [1, 2], [-2, -1]],
+        [[0, 0], [-2, 0], [1, 0], [-2, 1], [1, -2]],
+        [[0, 0], [-1, 0], [2, 0], [-1, -2], [2, 1]]
       ]
     };
 
@@ -714,7 +659,7 @@
     }
 
     /**
-     * @param {(Block | EmptyBlock)[][]} shape
+     * @param {Shape} shape
      * @param {number} x
      * @param {number} y
      */
@@ -759,9 +704,9 @@
      */
     rotateTetromino(direction) {
       const srsRuleSets = this.fieldTetromino.tetromino.type === "I"
-        ? Field.iTypeSRSRuleSets
-        : Field.basicSRSRuleSets;
-      const ruleSet = srsRuleSets[direction][this.fieldTetromino.getRotateDirection(direction)];
+        ? Field.I_TYPE_SRC_RULE_SETS
+        : Field.BASIC_SRS_RULE_SETS;
+      const ruleSet = srsRuleSets[direction][this.fieldTetromino.direction];
       const rotatedShape = this.fieldTetromino.getRotationShape(direction);
       for (const [ruleX, ruleY] of ruleSet) {
         if (this.canPlaceShape(
@@ -779,12 +724,52 @@
   }
 
   /**
+   * @typedef {{ nextTetrominoList: NextTetrominoesList }} NextTetrominoListProps
+   */
+
+  class NextTetrominoesList {
+    static Renderer = createRenderer({
+      render(/** @type {NextTetrominoListProps} */ { nextTetrominoList }) {
+        const x = Field.Renderer.X + Block.Renderer.SIZE * Field.WIDTH;
+        const y = Field.Renderer.Y;
+        return nextTetrominoList.tetrominoes.map(({ shape }, index) => (
+          BlockGroupRenderer({ shape, x, y: y + index * Block.Renderer.SIZE * 5 })
+        ));
+      }
+    });
+
+    /**
+     * @param {Tetromino[]} defaultTetrominoes
+     */
+    constructor(defaultTetrominoes) {
+      this.tetrominoes = defaultTetrominoes;
+      if (this.tetrominoes.length < 1) {
+        throw new TypeError("Argument defaultTetrominoes must has element.");
+      }
+    }
+
+    /**
+     * @param {Tetromino} newTetromino
+     */
+    shift(newTetromino) {
+      this.tetrominoes.push(newTetromino);
+      const oldTetromino = this.tetrominoes.shift();
+      if (!oldTetromino) {
+        throw new TypeError("tetrominoes has no element");
+      }
+      return oldTetromino;
+    }
+  }
+
+  /**
    * @typedef {{ gameData: GameData }} GameDataProps
    */
 
   class GameData {
     static Renderer = createRenderer({
       render(/** @type {GameDataProps} */ { gameData }, ctx) {
+        ctx.fillStyle = "black";
+        ctx.font = "12px sans-serif";
         ctx.fillText(String(gameData.level), GameData.Renderer.X, GameData.Renderer.Y);
       },
 
@@ -798,6 +783,53 @@
   }
 
   /**
+   * @typedef {{ lockDelay: LockDelay }} LockDelayProps
+   */
+
+  class LockDelay {
+    static Renderer = createRenderer({
+      render(/** @type {LockDelayProps} */ { lockDelay }, ctx) {
+        if (!lockDelay.isActivated) {
+          return;
+        }
+        const x = Field.Renderer.X;
+        const y = Field.Renderer.Y + (Block.Renderer.SIZE * Field.VISIBLE_HEIGHT);
+        const progress = (performance.now() - lockDelay.startTime) / LockDelay.DELAY;
+        const width = Block.Renderer.SIZE * Field.WIDTH * progress;
+        ctx.fillStyle = "#8ac";
+        ctx.fillRect(x, y, width, LockDelay.Renderer.HEIGHT);
+      },
+
+      static: {
+        HEIGHT: 30
+      }
+    });
+
+    static DELAY = 500;
+
+    isActivated = false;
+    startTime = 0;
+    onEnded = new OriginalEvent((dispatchAll) => {
+      this.handleEnded = dispatchAll;
+    });
+    timeout = new Timeout(() => {
+      this.inactivate();
+      this.handleEnded?.();
+    });
+
+    set() {
+      this.isActivated = true;
+      this.startTime = performance.now();
+      this.timeout.start(LockDelay.DELAY);
+    }
+
+    inactivate() {
+      this.isActivated = false;
+      this.timeout.cancel();
+    }
+  }
+
+  /**
    * @typedef {{ game: Game }} GameProps
    */
 
@@ -806,7 +838,9 @@
       render(/** @type {GameProps} */ { game }) {
         return [
           Field.Renderer({ field: game.field }),
-          GameData.Renderer({ gameData: game.gameData })
+          GameData.Renderer({ gameData: game.gameData }),
+          LockDelay.Renderer({ lockDelay: game.lockDelay }),
+          NextTetrominoesList.Renderer({ nextTetrominoList: game.nextTetrominoes })
         ];
       },
 
@@ -817,11 +851,13 @@
     });
 
     field = new Field(new FieldTetromino(Tetromino.random(), (Field.HEIGHT - Field.VISIBLE_HEIGHT - 2)));
+    nextTetrominoes = new NextTetrominoesList(Array.from({ length: 3 }, () => Tetromino.random()));
     gameData = new GameData();
+    lockDelay = new LockDelay();
 
     start() {
       this.tetrominoInterval = new Interval(() => {
-        this.field.moveTetromino(0, 1);
+        this.moveFieldTetromino(0, 1);
       });
       this.tetrominoInterval.start(Math.pow(0.8 - ((this.gameData.level - 1) * 0.007), this.gameData.level - 1) * 1000);
 
@@ -831,15 +867,15 @@
         }
 
         if (e.repeat) {
-          e.preventDefault();
+          return;
         }
         switch (e.code) {
           case "KeyX":
           case "ArrowUp":
-            this.field.rotateTetromino(1);
+            this.rotateFieldTetromino(1);
             break;
           case "KeyZ":
-            this.field.rotateTetromino(-1);
+            this.rotateFieldTetromino(-1);
             break;
           case "Space":
             // hardDrop
@@ -852,20 +888,70 @@
 
       onKeyDownRepeat.addListener((e) => {
         if (e.code === "ArrowDown") {
-          this.field.moveTetromino(0, 1);
+          this.moveFieldTetromino(0, 1);
         }
       }, { repeat: 50 });
 
       onKeyDownRepeat.addListener((e) => {
         switch (e.code) {
           case "ArrowLeft":
-            this.field.moveTetromino(-1, 0);
+            this.moveFieldTetromino(-1, 0);
             break;
           case "ArrowRight":
-            this.field.moveTetromino(1, 0);
+            this.moveFieldTetromino(1, 0);
             break;
         }
       }, { delay: 300, repeat: 50 });
+
+      this.lockDelay.onEnded.addListener(() => {
+        this.afterReachBottom();
+      });
+    }
+
+    /**
+     * @param {number} moveX
+     * @param {number} moveY
+     */
+    moveFieldTetromino(moveX, moveY) {
+      const result = this.field.moveTetromino(moveX, moveY);
+      if (result) {
+        this.handleActField();
+      }
+      return result;
+    }
+
+    /**
+     * @param {1 | -1} direction
+     */
+    rotateFieldTetromino(direction) {
+      const result = this.field.rotateTetromino(direction);
+      if (result) {
+        this.handleActField();
+      }
+      return result;
+    }
+
+    handleActField() {
+      const { fieldTetromino } = this.field;
+      const canMoveDown = this.field.canPlaceShape(
+        fieldTetromino.tetromino.shape,
+        fieldTetromino.fieldX,
+        fieldTetromino.fieldY + 1
+      );
+      if (!canMoveDown) {
+        this.lockDelay.set();
+      } else {
+        this.lockDelay.inactivate();
+      }
+    }
+
+    afterReachBottom() {
+      const { fieldTetromino } = this.field;
+      this.field.placed.place(fieldTetromino.tetromino, fieldTetromino.fieldX, fieldTetromino.fieldY);
+      const deletedRows = this.field.placed.deleteRows();
+      const newTetromino = this.nextTetrominoes.shift(Tetromino.random());
+      this.field.fieldTetromino = new FieldTetromino(newTetromino, Field.HEIGHT - Field.VISIBLE_HEIGHT - 2);
+      this.handleActField();
     }
   }
 
