@@ -331,6 +331,73 @@
   });
 
   /**
+   * @typedef {string | CanvasGradient | CanvasPattern} CanvasColorStyle
+   */
+
+  /**
+   * @typedef {{
+   *   text: string;
+   *   x: number;
+   *   y: number;
+   *   size: number;
+   *   color: CanvasColorStyle;
+   *   align?: CanvasTextAlign;
+   * }} TextProps
+   */
+
+  /**
+   * @type {CanvasRenderer<TextProps, {}>}
+   */
+  const TextRenderer = createRenderer({
+    render({ text, x, y, size, color, align = "left" }, ctx) {
+      ctx.font = `${size}px Rajdhani`;
+      ctx.textAlign = align;
+      ctx.fillStyle = color;
+      ctx.fillText(text, x, y);
+    }
+  });
+
+  /**
+   * @typedef {{
+   *   x: number;
+   *   y: number;
+   *   width: number;
+   *   height: number;
+   *   color: CanvasColorStyle;
+   * }} RectProps
+   */
+
+  /**
+   * @type {CanvasRenderer<RectProps, {}>}
+   */
+  const RectRenderer = createRenderer({
+    render({ x, y, width, height, color }, ctx) {
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y, width, height);
+    }
+  });
+
+  /**
+   * @typedef {{
+   *   color: CanvasColorStyle;
+  *   x: number;
+  *   y: number;
+  *   radius: number;
+  * }} CircleProps
+   */
+
+  /**
+   * @type {CanvasRenderer<CircleProps, {}>}
+   */
+  const CircleRenderer = createRenderer({
+    render({ color, x, y, radius }, ctx) {
+      ctx.fillStyle = color;
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+
+  /**
    * @typedef {{ isEmpty: boolean }} FieldBlock
    */
 
@@ -349,18 +416,32 @@
    */
 
   /**
-   * @typedef {{ block: DrawableBlock; x: number; y: number; }} NotEmptyBlockProps
+   * @typedef {{ block: DrawableBlock; x: number; y: number; }} FieldBlockProps
    */
 
+  /**
+   * @typedef {{ SIZE: number }} FIeldBLockStatic
+   */
+
+  /**
+   * @type {CanvasRenderer<FieldBlockProps, FIeldBLockStatic>}
+   */
   const FieldBlockRenderer = createRenderer({
-    render(/** @type {NotEmptyBlockProps} */ { block, x, y }, ctx) {
+    render({ block, x, y }, ctx) {
       if (block.isEmpty) {
         return;
       }
 
       if (typeof block.appearance === "string") {
-        ctx.fillStyle = block.appearance;
-        ctx.fillRect(x, y, FieldBlockRenderer.SIZE, FieldBlockRenderer.SIZE);
+        return [
+          RectRenderer({
+            x,
+            y,
+            width: FieldBlockRenderer.SIZE,
+            height: FieldBlockRenderer.SIZE,
+            color: block.appearance
+          })
+        ];
       } else {
         ctx.drawImage(block.appearance, x, y, FieldBlockRenderer.SIZE, FieldBlockRenderer.SIZE);
       }
@@ -532,8 +613,11 @@
    * @typedef {{ x: number, y: number, shape: Shape }} BlockGroupProps
    */
 
+  /**
+   * @type {CanvasRenderer<BlockGroupProps, {}>}
+   */
   const BlockGroupRenderer = createRenderer({
-    render(/** @type {BlockGroupProps} */ { shape, x, y }) {
+    render({ shape, x, y }) {
       const blocks = shape.flatMap((row, rowIndex) => (
         row.flatMap((block, colIndex) => (
           block.isEmpty
@@ -554,8 +638,11 @@
    */
 
   class Tetromino {
+    /**
+     * @type {CanvasRenderer<TetrominoProps, {}>}
+     */
     static Renderer = createRenderer({
-      render(/** @type {TetrominoProps} */ { tetromino, x, y }) {
+      render({ tetromino, x, y }) {
         return [BlockGroupRenderer({
           shape: tetromino.shape,
           x,
@@ -610,7 +697,7 @@
      * @type {CanvasRenderer<FieldTetrominoProps, {}>}
      */
     static Renderer = createRenderer({
-      render(/** @type {FieldTetrominoProps} */ { fieldTetromino }) {
+      render({ fieldTetromino }) {
         const tetrominoX = Field.Renderer.X + (FieldBlockRenderer.SIZE * fieldTetromino.fieldX);
         const tetrominoY = Field.Renderer.Y + (FieldBlockRenderer.SIZE * (fieldTetromino.fieldY - Field.VISIBLE_HEIGHT));
         return [
@@ -688,7 +775,7 @@
      * @type {CanvasRenderer<PlacedBlocksProps, {}>}
      */
     static Renderer = createRenderer({
-      render(/** @type {PlacedBlocksProps} */ { placedBlocks }) {
+      render({ placedBlocks }) {
         return [BlockGroupRenderer({
           shape: placedBlocks.shape,
           x: Field.Renderer.X,
@@ -773,8 +860,11 @@
    * @typedef {{ shape: Shape; x: number; y: number; }} GhostBlockProps
    */
 
+  /**
+   * @type {CanvasRenderer<GhostBlockProps, {}>}
+   */
   const GhostBlockRenderer = createRenderer({
-    render(/** @type {GhostBlockProps} */ { shape, x, y }) {
+    render({ shape, x, y }) {
       const ghostShape = shape.map((row) => (
         row.map((block) => (
           block.isEmpty
@@ -792,27 +882,32 @@
    * @typedef {{ field: Field }} FieldProps
    */
 
+  /**
+   * @typedef {{ X: number; Y: number; }} FieldStatic
+   */
+
   class Field {
     static WIDTH = 10;
     static HEIGHT = 40;
     static VISIBLE_HEIGHT = 20;
 
+    /**
+     * @type {CanvasRenderer<FieldProps, FieldStatic>}
+     */
     static Renderer = createRenderer({
-      render(/** @type {FieldProps} */ { field }, ctx) {
+      render({ field }) {
         const { fieldTetromino } = field;
-
-        ctx.fillStyle = "#dfdfdf";
-        /**
-         * @type {number}
-         */
         const x = Field.Renderer.X;
-        /**
-         * @type {number}
-         */
         const y = Field.Renderer.Y;
-        ctx.fillRect(x, y, FieldBlockRenderer.SIZE * Field.WIDTH, FieldBlockRenderer.SIZE * Field.VISIBLE_HEIGHT);
 
         return [
+          RectRenderer({
+            x,
+            y,
+            width: FieldBlockRenderer.SIZE * Field.WIDTH,
+            height: FieldBlockRenderer.SIZE * Field.VISIBLE_HEIGHT,
+            color: "#dfdfdf"
+          }),
           GhostBlockRenderer({
             x: x + FieldBlockRenderer.SIZE * fieldTetromino.fieldX,
             y: y + FieldBlockRenderer.SIZE * (field.getHardDropPosition() - (Field.HEIGHT - Field.VISIBLE_HEIGHT)),
@@ -950,8 +1045,11 @@
    */
 
   class NextTetrominoesList {
+    /**
+     * @type {CanvasRenderer<NextTetrominoListProps, {}>}
+     */
     static Renderer = createRenderer({
-      render(/** @type {NextTetrominoListProps} */ { nextTetrominoList }) {
+      render({ nextTetrominoList }) {
         const x = Field.Renderer.X + FieldBlockRenderer.SIZE * Field.WIDTH;
         const y = Field.Renderer.Y;
         return nextTetrominoList.tetrominoes.map((tetromino, index) => (
@@ -1001,19 +1099,37 @@
    * @typedef {{ gameData: GameData }} GameDataProps
    */
 
+  /**
+   * @typedef {{ X: number; Y: number; WIDTH: number }} GameDataStatic
+   */
+
+  /**
+   * @type {CanvasRenderer<GameDataProps, GameDataStatic>}
+   */
   const GameDataRenderer = createRenderer({
-    render(/** @type {GameDataProps} */ { gameData }, ctx) {
-      ctx.fillStyle = "#8ac";
-      for (const [index, [key, value]] of Object.entries(gameData).entries()) {
+    render({ gameData }) {
+      const color = "#8ac";
+      return Object.entries(gameData).flatMap(([key, value], index) => {
         const x = GameDataRenderer.X;
         const y = GameDataRenderer.Y + index * 150;
-        ctx.font = "40px sans-serif";
-        ctx.textAlign = "left";
-        ctx.fillText(String(key), x, y);
-        ctx.font = "45px sans-serif";
-        ctx.textAlign = "right";
-        ctx.fillText(String(value), x + GameDataRenderer.WIDTH, y + 60);
-      }
+        return [
+          TextRenderer({
+            text: String(key).toUpperCase(),
+            x,
+            y,
+            size: 42,
+            color
+          }),
+          TextRenderer({
+            text: String(value),
+            x: x + GameDataRenderer.WIDTH,
+            y: y + 65,
+            size: 47,
+            align: "right",
+            color
+          })
+        ];
+      });
     },
 
     static: {
@@ -1027,9 +1143,16 @@
    * @typedef {{ lockDelay: LockDelay }} LockDelayProps
    */
 
+  /**
+   * @typedef {{ HEIGHT: number }} LockDelayStatic
+   */
+
   class LockDelay {
+    /**
+     * @type {CanvasRenderer<LockDelayProps, LockDelayStatic>}
+     */
     static Renderer = createRenderer({
-      render(/** @type {LockDelayProps} */ { lockDelay }, ctx) {
+      render({ lockDelay }) {
         if (!lockDelay.isActivated) {
           return;
         }
@@ -1037,8 +1160,9 @@
         const y = Field.Renderer.Y + (FieldBlockRenderer.SIZE * Field.VISIBLE_HEIGHT);
         const progress = (performance.now() - lockDelay.startTime) / LockDelay.DELAY;
         const width = FieldBlockRenderer.SIZE * Field.WIDTH * progress;
-        ctx.fillStyle = "#8ac";
-        ctx.fillRect(x, y, width, LockDelay.Renderer.HEIGHT);
+        return [
+          RectRenderer({ x, y, width, height: LockDelay.Renderer.HEIGHT, color: "#8ac" })
+        ];
       },
 
       static: {
@@ -1074,31 +1198,36 @@
    * @typedef {{ holder: Holder }} HolderProps
    */
 
+  /**
+   * @typedef {{ X: number; Y: number }} HolderStatic
+   */
+
   class Holder {
+    /**
+     * @type {CanvasRenderer<HolderProps, HolderStatic>}
+     */
     static Renderer = createRenderer({
-      render(/** @type {HolderProps} */ { holder }, ctx) {
+      render({ holder }, ctx) {
         if (!holder.tetromino) {
           return;
         }
 
         const size = FieldBlockRenderer.SIZE * 5;
 
-        if (!holder.active) {
-          ctx.fillStyle = "#f00";
-          ctx.arc(Holder.Renderer.X + size - 40, Holder.Renderer.Y + size - 40, 20, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        /**
-         * @type {number}
-         */
         const x = Holder.Renderer.X + (size - FieldBlockRenderer.SIZE * holder.tetromino.width) / 2;
-        /**
-         * @type {number}
-         */
         const y = Holder.Renderer.Y + (size - FieldBlockRenderer.SIZE * holder.tetromino.height) / 2;
 
-        return [BlockGroupRenderer({ shape: holder.tetromino.shape, x, y })];
+        return [
+          BlockGroupRenderer({ shape: holder.tetromino.shape, x, y }),
+          ...holder.active
+            ? []
+            : [CircleRenderer({
+              x: Holder.Renderer.X + size - 40,
+              y: Holder.Renderer.Y + size - 40,
+              radius: 20,
+              color: "#f00"
+            })]
+        ];
       },
 
       static: {
@@ -1143,12 +1272,19 @@
    */
 
   class Game {
+    /**
+     * @type {CanvasRenderer<GameProps, {}>}
+     */
     static Renderer = createRenderer({
-      render(/** @type {GameProps} */ { game }, ctx) {
-        ctx.fillStyle = "#f5f5f5";
-        ctx.fillRect(0, 0, Tetris.Renderer.WIDTH, Tetris.Renderer.HEIGHT);
-
+      render({ game }) {
         return [
+          RectRenderer({
+            x: 0,
+            y: 0,
+            width: Tetris.Renderer.WIDTH,
+            height: Tetris.Renderer.HEIGHT,
+            color: "#f5f5f5"
+          }),
           Field.Renderer({ field: game.field }),
           GameDataRenderer({ gameData: game.gameData }),
           LockDelay.Renderer({ lockDelay: game.lockDelay }),
@@ -1404,9 +1540,16 @@
    * @typedef {{ tetris: Tetris }} TetrisProps
    */
 
+  /**
+   * @typedef {{ WIDTH: number; HEIGHT: number }} TetrisStatic
+   */
+
   class Tetris {
+    /**
+     * @type {CanvasRenderer<TetrisProps, TetrisStatic>}
+     */
     static Renderer = createRenderer({
-      render(/** @type {TetrisProps} */ { tetris }) {
+      render({ tetris }) {
         return [
           Game.Renderer({ game: tetris.game })
         ];
