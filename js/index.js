@@ -1308,7 +1308,7 @@
       this.gameData.time--;
       if (this.gameData.time === 0) {
         this.timeInterval.stop();
-        this.handleGameOver?.();
+        this.endGame();
       }
     });
 
@@ -1485,13 +1485,18 @@
 
       if (this.isGameOver()) {
         this.reset();
-        this.handleGameOver?.();
+        this.endGame();
         return;
       }
 
       this.holder.activate();
       this.setMovingDownInterval();
       this.setNextTetromino();
+    }
+
+    endGame() {
+      this.reset();
+      this.handleGameOver?.();
     }
 
     calculateScore(/** @type {ScoreCalculationData} */ { lines, combo, level }) {
