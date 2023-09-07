@@ -6,7 +6,6 @@
  * @todo ボタン
  * @todo downするタイミング
  * @todo start screen
- * @todo onsomeblockmelted
  */
 
 (async () => {
@@ -181,30 +180,11 @@
 
   /**
    * @template {any[]} EVENTS
-   */
-  class OriginalEventHandler {
-    /**
-     * @param {(...eventArgs: EVENTS) => void} handler
-     */
-    constructor(handler) {
-      this.handler = handler;
-    }
-
-    /**
-     * @param {EVENTS} eventArgs
-     */
-    dispatch = (...eventArgs) => {
-      this.handler(...eventArgs);
-    };
-  }
-
-  /**
-   * @template {any[]} EVENTS
    * @template {object | void} OPTIONS
    */
   class OriginalEvent {
     /**
-     * @type {Set<OriginalEventHandler<EVENTS>>}
+     * @type {Set<(...eventArgs: EVENTS) => void>}
      */
     handlers = new Set();
     initCalled = false;
@@ -219,20 +199,24 @@
     }
 
     /**
-     * @param {(...eventArgs: EVENTS) => void} handlerFn
+     * @param {(...eventArgs: EVENTS) => void} handler
      * @param {OPTIONS} options
      */
-    addListener(handlerFn, options) {
+    addListener(handler, options) {
       if (!this.initCalled) {
         this.afterEventAdded = this.init(this.dispatchAll);
         this.initCalled = true;
       }
 
-      const handler = new OriginalEventHandler(handlerFn);
-
-      this.afterEventAdded?.(options, handler.dispatch);
+      this.afterEventAdded?.(options, handler);
 
       this.handlers.add(handler);
+
+      return {
+        remove: () => {
+          this.handlers.delete(handler);
+        }
+      };
     }
 
     /**
@@ -241,7 +225,7 @@
      */
     dispatchAll = (...eventArgs) => {
       for (const handler of this.handlers) {
-        handler.dispatch(...eventArgs);
+        handler(...eventArgs);
       }
     };
   }
@@ -487,10 +471,6 @@
   class MeltableBlock {
     isEmpty = false;
 
-    onMelted = new OriginalEvent((dispatchAll) => {
-      this.handleMelted = dispatchAll;
-    });
-
     /**
      * @type {MeltStatus}
      */
@@ -508,7 +488,6 @@
       this.status = "melted";
       this.melting = false;
       this.isEmpty = true;
-      this.handleMelted?.();
     });
 
     /**
@@ -797,10 +776,6 @@
       this.shape = Array.from({ length: this.height }, () => this.createEmptyRow());
     }
 
-    onSomeBlockMelted = new OriginalEvent((dispatchAll) => {
-      this.handleSomeBlockMelted = dispatchAll;
-    });
-
     /**
      * @param {Tetromino} tetromino
      * @param {number} x
@@ -821,9 +796,6 @@
 
           const meltableBlock = new MeltableBlock(tetromino.type, meltOptions);
           meltableBlock.startMelt();
-          meltableBlock.onMelted.addListener(() => {
-            this.handleSomeBlockMelted?.();
-          });
 
           return meltableBlock;
         })
@@ -853,6 +825,16 @@
 
     createEmptyRow() {
       return Array.from({ length: this.width }, () => new EmptyBlock());
+    }
+
+    stopAllMelt() {
+      for (const row of this.shape) {
+        for (const block of row) {
+          if (block instanceof MeltableBlock) {
+            block.stopMelt();
+          }
+        }
+      }
     }
   }
 
@@ -1268,6 +1250,14 @@
    */
 
   /**
+   * @typedef {{
+   *   score: number;
+   *   lines: number;
+   *   time: number;
+   * }} GameResult
+   */
+
+  /**
    * @typedef {{ game: Game }} GameProps
    */
 
@@ -1322,66 +1312,87 @@
       }
     });
 
+    /**
+     * @type {OriginalEvent<[GameResult], void>}
+     */
     onGameOver = new OriginalEvent((dispatchAll) => {
-      this.handleGameOver = dispatchAll;
+      this.handleGameOver = () => dispatchAll({
+        score: this.gameData.score,
+        lines: this.gameData.lines,
+        time: this.gameData.time
+      });
     });
 
     start() {
       this.setMovingDownInterval();
       this.timeInterval.start(1000);
 
-      onKeyDown.addListener((e) => {
-        if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) {
-          e.preventDefault();
-        }
+      this.listeners = [
+        onKeyDown.addListener((e) => {
+          if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) {
+            e.preventDefault();
+          }
 
-        if (e.repeat) {
-          return;
-        }
-        switch (e.code) {
-          case "KeyX":
-          case "ArrowUp":
-            this.rotateFieldTetromino(1);
-            break;
-          case "KeyZ":
-            this.rotateFieldTetromino(-1);
-            break;
-          case "Space":
-            this.moveFieldTetromino(0, this.field.getHardDropPosition() - this.field.fieldTetromino.fieldY, true);
-            break;
-          case "KeyC":
-            if (this.holder.active) {
-              const heldTetromino = this.holder.hold(this.field.fieldTetromino.tetromino);
-              if (heldTetromino) {
-                this.setFieldTetromino(heldTetromino);
-              } else {
-                this.setNextTetromino();
+          if (e.repeat) {
+            return;
+          }
+          switch (e.code) {
+            case "KeyX":
+            case "ArrowUp":
+              this.rotateFieldTetromino(1);
+              break;
+            case "KeyZ":
+              this.rotateFieldTetromino(-1);
+              break;
+            case "Space":
+              this.moveFieldTetromino(0, this.field.getHardDropPosition() - this.field.fieldTetromino.fieldY, true);
+              break;
+            case "KeyC":
+              if (this.holder.active) {
+                const heldTetromino = this.holder.hold(this.field.fieldTetromino.tetromino);
+                if (heldTetromino) {
+                  this.setFieldTetromino(heldTetromino);
+                } else {
+                  this.setNextTetromino();
+                }
               }
-            }
-            break;
-        }
-      });
+              break;
+          }
+        }),
 
-      onKeyDownRepeat.addListener((e) => {
-        if (e.code === "ArrowDown") {
-          this.moveFieldTetromino(0, 1);
-        }
-      }, { repeat: 50 });
+        onKeyDownRepeat.addListener((e) => {
+          if (e.code === "ArrowDown") {
+            this.moveFieldTetromino(0, 1);
+          }
+        }, { repeat: 50 }),
 
-      onKeyDownRepeat.addListener((e) => {
-        switch (e.code) {
-          case "ArrowLeft":
-            this.moveFieldTetromino(-1, 0);
-            break;
-          case "ArrowRight":
-            this.moveFieldTetromino(1, 0);
-            break;
-        }
-      }, { delay: 300, repeat: 50 });
+        onKeyDownRepeat.addListener((e) => {
+          switch (e.code) {
+            case "ArrowLeft":
+              this.moveFieldTetromino(-1, 0);
+              break;
+            case "ArrowRight":
+              this.moveFieldTetromino(1, 0);
+              break;
+          }
+        }, { delay: 300, repeat: 50 }),
 
-      this.lockDelay.onEnded.addListener(() => {
-        this.afterReachBottom();
-      });
+        this.lockDelay.onEnded.addListener(() => {
+          this.afterReachBottom();
+        })
+      ];
+    }
+
+    reset() {
+      if (this.listeners) {
+        for (const listener of this.listeners) {
+          listener.remove();
+        }
+      }
+      this.timeInterval.stop();
+      this.movingDownInterval.stop();
+      this.lockDelay.inactivate();
+      this.field.placed.stopAllMelt();
     }
 
     setMovingDownInterval() {
@@ -1455,6 +1466,7 @@
           }
         }
       );
+
       const deletedLines = this.field.placed.deleteRows();
 
       this.gameData.combo = deletedLines > 0
@@ -1472,6 +1484,7 @@
       this.gameData.level = Math.floor(this.gameData.lines / 10 + 1);
 
       if (this.isGameOver()) {
+        this.reset();
         this.handleGameOver?.();
         return;
       }
@@ -1581,8 +1594,8 @@
         tetris: this
       }));
 
-      this.game.onGameOver.addListener(() => {
-        alert("Game Over");
+      this.game.onGameOver.addListener(({ score, lines, time }) => {
+        alert(`Game Over\nScore: ${score}\nLines: ${lines}\nTime: ${time}`)
       });
       this.game.start();
     }
