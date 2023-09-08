@@ -27,37 +27,42 @@
   });
 
   /**
-   * @param {Record<string, Record<string, string>>} obj
-   * @returns {Promise<Record<string, Record<string, HTMLImageElement>>>}
+   * @template {Record<string, Record<string, string>>} T
+   * @param {T} obj
    */
   const loadImagesObj = async (obj) => {
-    return Object.fromEntries(await Promise.all(
-      Object.entries(obj).map(async ([key, urls]) => await Promise.all([key, Object.fromEntries(
-        await Promise.all(
-          Object.entries(urls).map(async ([subKey, url]) => [subKey, await loadImage(url)])
-        )
-      )]))
-    ));
+    return /** @type {Promise<{[P in keyof T]: Record<keyof T[P], HTMLImageElement> }>}  */ (
+      Object.fromEntries(await Promise.all(
+        Object.entries(obj).map(async ([key, urls]) => await Promise.all([key, Object.fromEntries(
+          await Promise.all(
+            Object.entries(urls).map(async ([subKey, url]) => ([subKey, await loadImage(url)]))
+          )
+        )]))
+      ))
+    );
   };
 
   const images = await loadImagesObj({
     iceBlocks: {
-      "I": "./assets/images/ice-blocks/i.png",
-      "O": "./assets/images/ice-blocks/o.png",
-      "S": "./assets/images/ice-blocks/s.png",
-      "Z": "./assets/images/ice-blocks/z.png",
-      "J": "./assets/images/ice-blocks/j.png",
-      "L": "./assets/images/ice-blocks/l.png",
-      "T": "./assets/images/ice-blocks/t.png"
+      I: "./assets/images/ice-blocks/i.png",
+      O: "./assets/images/ice-blocks/o.png",
+      S: "./assets/images/ice-blocks/s.png",
+      Z: "./assets/images/ice-blocks/z.png",
+      J: "./assets/images/ice-blocks/j.png",
+      L: "./assets/images/ice-blocks/l.png",
+      T: "./assets/images/ice-blocks/t.png"
     },
     middleBlocks: {
-      "I": "./assets/images/middle-blocks/i.png",
-      "O": "./assets/images/middle-blocks/o.png",
-      "S": "./assets/images/middle-blocks/s.png",
-      "Z": "./assets/images/middle-blocks/z.png",
-      "J": "./assets/images/middle-blocks/j.png",
-      "L": "./assets/images/middle-blocks/l.png",
-      "T": "./assets/images/middle-blocks/t.png"
+      I: "./assets/images/middle-blocks/i.png",
+      O: "./assets/images/middle-blocks/o.png",
+      S: "./assets/images/middle-blocks/s.png",
+      Z: "./assets/images/middle-blocks/z.png",
+      J: "./assets/images/middle-blocks/j.png",
+      L: "./assets/images/middle-blocks/l.png",
+      T: "./assets/images/middle-blocks/t.png"
+    },
+    misc: {
+      logo: "./assets/images/logo.svg"
     }
   });
 
@@ -364,10 +369,10 @@
   /**
    * @typedef {{
    *   color: CanvasColorStyle;
-  *   x: number;
-  *   y: number;
-  *   radius: number;
-  * }} CircleProps
+   *   x: number;
+   *   y: number;
+   *   radius: number;
+   * }} CircleProps
    */
 
   /**
@@ -378,6 +383,25 @@
       ctx.fillStyle = color;
       ctx.arc(x, y, radius, 0, Math.PI * 2);
       ctx.fill();
+    }
+  });
+
+  /**
+   * @typedef {{
+   *   image: CanvasImageSource;
+   *   x: number;
+   *   y: number;
+   *   width: number;
+   *   height: number;
+   * }} ImageProps
+   */
+
+  /**
+   * @type {CanvasRenderer<ImageProps, {}>}
+   */
+  const ImageRenderer = createRenderer({
+    render({ image, x, y, width, height }, ctx) {
+      ctx.drawImage(image, x, y, width, height);
     }
   });
 
@@ -404,11 +428,11 @@
    */
 
   /**
-   * @typedef {{ SIZE: number }} FIeldBLockStatic
+   * @typedef {{ SIZE: number }} FieldBlockStatic
    */
 
   /**
-   * @type {CanvasRenderer<FieldBlockProps, FIeldBLockStatic>}
+   * @type {CanvasRenderer<FieldBlockProps, FieldBlockStatic>}
    */
   const FieldBlockRenderer = createRenderer({
     render({ block, x, y }, ctx) {
@@ -416,8 +440,8 @@
         return;
       }
 
-      if (typeof block.appearance === "string") {
-        return [
+      return typeof block.appearance === "string"
+        ? [
           RectRenderer({
             x,
             y,
@@ -425,10 +449,16 @@
             height: FieldBlockRenderer.SIZE,
             color: block.appearance
           })
+        ]
+        : [
+          ImageRenderer({
+            image: block.appearance,
+            x,
+            y,
+            width: FieldBlockRenderer.SIZE,
+            height: FieldBlockRenderer.SIZE
+          })
         ];
-      } else {
-        ctx.drawImage(block.appearance, x, y, FieldBlockRenderer.SIZE, FieldBlockRenderer.SIZE);
-      }
     },
 
     static: {
@@ -1073,7 +1103,7 @@
    *   level: number;
    *   lines: number;
    *   combo: number;
-   *   time: number;
+   *   timeLeft: number;
    * }} GameData
    */
 
@@ -1096,7 +1126,7 @@
         const y = GameDataRenderer.Y + index * 150;
         return [
           TextRenderer({
-            text: String(key).toUpperCase(),
+            text: String(key).replace(/[A-Z]/g, " $&").toUpperCase(),
             x,
             y,
             size: 42,
@@ -1284,6 +1314,8 @@
       }
     });
 
+    static MAX_TIME = 300;
+
     field = new Field(new FieldTetromino(Tetromino.random(), (Field.HEIGHT - Field.VISIBLE_HEIGHT - 2)));
     nextTetrominoes = new NextTetrominoesList(Array.from({ length: 3 }, () => Tetromino.random()));
     lockDelay = new LockDelay();
@@ -1297,7 +1329,7 @@
       score: 0,
       lines: 0,
       combo: -1,
-      time: 300
+      timeLeft: Game.MAX_TIME
     };
 
     movingDownInterval = new Interval(() => {
@@ -1305,8 +1337,8 @@
     });
 
     timeInterval = new Interval(() => {
-      this.gameData.time--;
-      if (this.gameData.time === 0) {
+      this.gameData.timeLeft--;
+      if (this.gameData.timeLeft === 0) {
         this.timeInterval.stop();
         this.endGame();
       }
@@ -1319,7 +1351,7 @@
       this.handleGameOver = () => dispatchAll({
         score: this.gameData.score,
         lines: this.gameData.lines,
-        time: this.gameData.time
+        time: Game.MAX_TIME - this.gameData.timeLeft
       });
     });
 
@@ -1484,7 +1516,6 @@
       this.gameData.level = Math.floor(this.gameData.lines / 10 + 1);
 
       if (this.isGameOver()) {
-        this.reset();
         this.endGame();
         return;
       }
@@ -1554,6 +1585,195 @@
     }
   }
 
+  class StartScreen {
+    /**
+     * @type {CanvasRenderer<void, {}>}
+     */
+    static Renderer = createRenderer({
+      render() {
+        const logoY = 100;
+        const logoSize = 800;
+
+        return [
+          RectRenderer({
+            x: 0,
+            y: 0,
+            width: Tetris.Renderer.WIDTH,
+            height: Tetris.Renderer.HEIGHT,
+            color: "#f5f5f5"
+          }),
+          ImageRenderer({
+            image: images.misc.logo,
+            x: (Tetris.Renderer.WIDTH - logoSize) / 2,
+            y: logoY,
+            width: logoSize,
+            height: logoSize
+          }),
+          TextRenderer({
+            text: "Click or press enter to start",
+            x: Tetris.Renderer.WIDTH / 2,
+            y: logoSize + logoY + 200,
+            size: 80,
+            color: "#8ac",
+            align: "center"
+          })
+        ];
+      }
+    });
+
+    /**
+     * @param {CanvasEvents} canvasEvents
+     */
+    constructor(canvasEvents) {
+      this.canvasEvents = canvasEvents;
+    }
+
+    onStartGame = new OriginalEvent((dispatchAll) => {
+      this.handleStartGame = dispatchAll;
+    });
+
+    start() {
+      this.listeners = [
+        onKeyDown.addListener((e) => {
+          if (["Enter"].includes(e.code)) {
+            this.endStartScreen();
+          }
+        }),
+
+        this.canvasEvents.onClick.addListener(() => {
+          this.endStartScreen();
+        })
+      ];
+    }
+
+    endStartScreen() {
+      this.reset();
+      this.handleStartGame?.();
+    }
+
+    reset() {
+      if (this.listeners) {
+        for (const listener of this.listeners) {
+          listener.remove();
+        }
+      }
+    }
+  }
+
+  /**
+   * @typedef {{ gameOverScreen: GameOverScreen }} GameOverScreenProps
+   */
+
+  /**
+   * @typedef {{
+   *   canvasEvents: CanvasEvents,
+   *   gameResult: GameResult
+   * }} GameOverScreenOptions
+   */
+
+  class GameOverScreen {
+    /**
+     * @type {CanvasRenderer<GameOverScreenProps, {}>}
+     */
+    static Renderer = createRenderer({
+      render({ gameOverScreen }) {
+        const { gameResult } = gameOverScreen;
+
+        const centerTextProps = /** @type {const} */ ({
+          x: Tetris.Renderer.WIDTH / 2,
+          color: "#8ac",
+          align: "center"
+        });
+
+        return [
+          RectRenderer({
+            x: 0,
+            y: 0,
+            width: Tetris.Renderer.WIDTH,
+            height: Tetris.Renderer.HEIGHT,
+            color: "#f5f5f5"
+          }),
+          TextRenderer({
+            ...centerTextProps,
+            text: "Game Over",
+            y: 200,
+            size: 100,
+          }),
+          TextRenderer({
+            ...centerTextProps,
+            text: String(gameResult.score),
+            y: 475,
+            size: 150,
+          }),
+          TextRenderer({
+            ...centerTextProps,
+            text: `Time: ${gameResult.time}`,
+            y: 650,
+            size: 60,
+          }),
+          TextRenderer({
+            ...centerTextProps,
+            text: `Lines: ${gameResult.lines}`,
+            y: 750,
+            size: 60,
+          }),
+          TextRenderer({
+            ...centerTextProps,
+            text: "Click or press enter to restart",
+            y: 1100,
+            size: 80,
+          })
+        ];
+      }
+    });
+
+    constructor(/** @type {GameOverScreenOptions} */ { canvasEvents, gameResult }) {
+      this.canvasEvents = canvasEvents;
+      this.gameResult = gameResult;
+    }
+
+    onRestartGame = new OriginalEvent((dispatchAll) => {
+      this.handleRestartGame = dispatchAll;
+    });
+
+    start() {
+      this.listeners = [
+        onKeyDown.addListener((e) => {
+          if (["Enter"].includes(e.code)) {
+            this.endGameOverScreen();
+          }
+        }),
+
+        this.canvasEvents.onClick.addListener(() => {
+          this.endGameOverScreen();
+        })
+      ];
+    }
+
+    endGameOverScreen() {
+      this.reset();
+      this.handleRestartGame?.();
+    }
+
+    reset() {
+      if (this.listeners) {
+        for (const listener of this.listeners) {
+          listener.remove();
+        }
+      }
+    }
+  }
+
+  /**
+   * @typedef {{
+   *   onClick: OriginalEvent<[MouseEvent], void>
+   * }} CanvasEvents
+   */
+
+  /**
+   * @typedef {"PREPARATION" | "START_SCREEN" | "GAME" | "GAME_OVER_SCREEN"} TetrisScreen
+   */
+
   /**
    * @typedef {{ tetris: Tetris }} TetrisProps
    */
@@ -1568,9 +1788,40 @@
      */
     static Renderer = createRenderer({
       render({ tetris }) {
-        return [
-          Game.Renderer({ game: tetris.game })
-        ];
+        const { screen, game, gameOverScreen } = tetris;
+        switch (screen) {
+          case "PREPARATION":
+            return [
+              TextRenderer({
+                text: "Preparation",
+                x: Tetris.Renderer.WIDTH / 2,
+                y: Tetris.Renderer.HEIGHT / 2,
+                size: 50,
+                color: "#8ac",
+                align: "center"
+              })
+            ];
+          case "START_SCREEN":
+            return [
+              StartScreen.Renderer()
+            ];
+          case "GAME":
+            if (!game) {
+              throw new TypeError("tetris.game is undefined");
+            }
+            return [
+              Game.Renderer({ game })
+            ];
+          case "GAME_OVER_SCREEN":
+            if (!gameOverScreen) {
+              throw new TypeError("tetris.gameOverScreen is undefined");
+            }
+            return [
+              GameOverScreen.Renderer({ gameOverScreen })
+            ];
+          default:
+            throw new TypeError("Invalid state.");
+        }
       },
 
       static: {
@@ -1579,30 +1830,75 @@
       }
     });
 
-    game = new Game();
+    /**
+     * @type {CanvasEvents}
+     */
+    canvasEvents = {
+      onClick: new OriginalEvent((dispatchAll) => {
+        this.canvas.addEventListener("click", dispatchAll);
+      })
+    };
+
+    /**
+     * @type {TetrisScreen}
+     */
+    screen = "PREPARATION";
 
     /**
      * @param {ParentNode} canvasWrapper
      */
     constructor(canvasWrapper) {
       this.canvasWrapper = canvasWrapper;
+      this.canvas = document.createElement("canvas");
+      this.canvas.width = Tetris.Renderer.WIDTH;
+      this.canvas.height = Tetris.Renderer.HEIGHT;
     }
 
     start() {
-      const canvas = document.createElement("canvas");
-      canvas.width = Tetris.Renderer.WIDTH;
-      canvas.height = Tetris.Renderer.HEIGHT;
-      this.canvasWrapper.replaceChildren(canvas);
+      this.canvasWrapper.replaceChildren(this.canvas);
 
-      const root = new Root(canvas);
+      const root = new Root(this.canvas);
       root.setUp(() => Tetris.Renderer({
         tetris: this
       }));
 
-      this.game.onGameOver.addListener(({ score, lines, time }) => {
-        alert(`Game Over\nScore: ${score}\nLines: ${lines}\nTime: ${time}`)
+      this.startStartScreen();
+    }
+
+    startStartScreen() {
+      this.screen = "START_SCREEN";
+      this.startScreen = new StartScreen(this.canvasEvents);
+
+      this.startScreen.onStartGame.addListener(() => {
+        this.startGame();
       });
+
+      this.startScreen.start();
+    }
+
+    startGame() {
+      this.screen = "GAME";
+      this.game = new Game();
+
+      this.game.onGameOver.addListener((gameResult) => {
+        this.startGameOverScreen(gameResult);
+      });
+
       this.game.start();
+    }
+
+    /**
+     * @param {GameResult} gameResult
+     */
+    startGameOverScreen(gameResult) {
+      this.screen = "GAME_OVER_SCREEN";
+      this.gameOverScreen = new GameOverScreen({ canvasEvents: this.canvasEvents, gameResult });
+
+      this.gameOverScreen.onRestartGame.addListener(() => {
+        this.startGame();
+      });
+
+      this.gameOverScreen.start();
     }
   }
 
@@ -1610,5 +1906,10 @@
   if (!canvasWrapper) {
     throw new TypeError("Cannot find element #tetris");
   }
-  new Tetris(canvasWrapper).start();
+  try {
+    new Tetris(canvasWrapper).start();
+  } catch (e) {
+    console.error(e);
+    canvasWrapper.replaceChildren("An error occurred during preparation.")
+  }
 })();
