@@ -1,7 +1,7 @@
 body {
   font: 16px sans-serif;
   margin: 0;
-  color: #444;
+  color: #547;
 }
 
 main {
@@ -25,6 +25,10 @@ h1 {
   justify-content: center;
 }
 
+h1 > img {
+  width: 70%;
+}
+
 dl {
   display: grid;
   grid-template-columns: repeat(2, max-content);
@@ -39,10 +43,6 @@ dt {
 dd {
   grid-column: 2;
   margin: 0;
-}
-
-h1 > img {
-  width: 70%;
 }
 
 #tetris {
