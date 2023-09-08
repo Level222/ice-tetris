@@ -9,15 +9,8 @@ main {
   justify-content: center;
 }
 
-@media screen and (min-width: 600px) {
-  .center {
-    width: 600px;
-  }
-}
-
-.center {
-  padding: 0 30px;
-  background-color: #f5ffff;
+li {
+  margin: 8px 0;
 }
 
 dl {
@@ -36,12 +29,23 @@ dd {
   margin: 0;
 }
 
-#tetris {
+.center {
+  padding: 0 30px;
+  background-color: #f5ffff;
+}
+
+@media screen and (min-width: 600px) {
+  .center {
+    width: 600px;
+  }
+}
+
+.tetris {
   display: flex;
   justify-content: center;
 }
 
-canvas {
+.tetris canvas {
   max-width: 100%;
   max-height: 90vh;
 }
