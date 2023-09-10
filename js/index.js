@@ -59,7 +59,7 @@
       T: "./assets/images/middle-blocks/t.png"
     },
     misc: {
-      logo: "./assets/images/logo.svg"
+      logo: "./assets/images/logo.png"
     }
   });
 
