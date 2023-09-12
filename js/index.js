@@ -17,8 +17,8 @@
     image.addEventListener("load", () => {
       resolve(image);
     });
-    image.addEventListener("error", (e) => {
-      reject(e.error);
+    image.addEventListener("error", () => {
+      reject(new Error(`Unable to load image from ${image.src}`));
     });
     image.src = url;
   });
@@ -941,10 +941,10 @@
         [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]]
       ],
       "-1": [
+        [[0, 0], [1, 0], [1, -1], [0, 2], [1, 2]],
         [[0, 0], [1, 0], [1, 1], [0, -2], [1, -2]],
         [[0, 0], [-1, 0], [-1, -1], [0, 2], [-1, 2]],
-        [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]],
-        [[0, 0], [1, 0], [1, -1], [0, 2], [1, 2]]
+        [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]]
       ],
     };
 
@@ -956,10 +956,10 @@
         [[0, 0], [1, 0], [2, 0], [1, 2], [-2, -1]]
       ],
       "-1": [
+        [[0, 0], [-1, 0], [2, 0], [-1, -2], [2, 1]],
         [[0, 0], [2, 0], [-1, 0], [2, -1], [-1, 2]],
         [[0, 0], [1, 0], [-2, 0], [1, 2], [-2, -1]],
-        [[0, 0], [-2, 0], [1, 0], [-2, 1], [1, -2]],
-        [[0, 0], [-1, 0], [2, 0], [-1, -2], [2, 1]]
+        [[0, 0], [-2, 0], [1, 0], [-2, 1], [1, -2]]
       ]
     };
 
@@ -1899,14 +1899,18 @@
     }
   }
 
-  const canvasWrapper = document.getElementById("tetris");
-  if (!canvasWrapper) {
-    throw new TypeError("Cannot find element #tetris");
-  }
-  try {
-    new Tetris(canvasWrapper).start();
-  } catch (e) {
-    console.error(e);
-    canvasWrapper.replaceChildren("An error occurred during preparation.")
-  }
+  const main = () => {
+    const canvasWrapper = document.getElementById("tetris");
+    if (!canvasWrapper) {
+      throw new TypeError("Cannot find element #tetris");
+    }
+    try {
+      new Tetris(canvasWrapper).start();
+    } catch (e) {
+      console.error(e);
+      canvasWrapper.replaceChildren("An error occurred during preparation.");
+    }
+  };
+
+  main();
 })();
